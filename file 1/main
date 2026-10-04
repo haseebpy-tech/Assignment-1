@@ -1,0 +1,820 @@
+/*
+ * CSC211 - Data Structures | Assignment #1 (Lab)
+ * Singly, Doubly and Circular Linked List tasks.
+ *
+ * Rules followed:
+ *  - No extra list / array / vector is used to solve any task.
+ *  - No library algorithms (std::reverse, std::swap, ...) are used.
+ *  - Nodes are never re-created: wherever a task re-orders nodes, only the
+ *    links are changed, so every node keeps its original address.
+ *  - Small helpers (append / print / free) exist only to build and show test data.
+ *
+ * Compile:  g++ -std=c++11 -Wall -o assignment1 Assignment1_LinkedLists.cpp
+ */
+
+#include <iostream>
+#include <string>
+using namespace std;
+
+/* ======================================================================
+ *                       PART 1 : SINGLY LINKED LIST
+ * ====================================================================== */
+struct Node {
+    int data;
+    Node* next;
+    Node(int d) : data(d), next(NULL) {}
+};
+
+// ---------- helpers (test-data only) ----------
+void append(Node*& head, int v) {
+    Node* n = new Node(v);
+    if (!head) { head = n; return; }
+    Node* t = head;
+    while (t->next) t = t->next;
+    t->next = n;
+}
+Node* build(const int a[], int n) {
+    Node* head = NULL;
+    for (int i = 0; i < n; i++) append(head, a[i]);
+    return head;
+}
+void print(Node* h) {
+    for (; h; h = h->next) cout << h->data << " -> ";
+    cout << "NULL\n";
+}
+void freeList(Node* h) {
+    while (h) { Node* t = h; h = h->next; delete t; }
+}
+
+/* ---------- Task 1: print in reverse WITHOUT changing the list ----------
+ * Algorithm: recursion. Go to the end first, print while coming back.
+ *   printReverse(node):
+ *       if node == NULL: return
+ *       printReverse(node.next)
+ *       print node.data
+ */
+void printReverse(Node* h) {
+    if (!h) return;
+    printReverse(h->next);
+    cout << h->data << " ";
+}
+
+/* ---------- Task 2: reverse the list itself (links only) ----------
+ * Algorithm: three pointers prev, cur, nxt.
+ *   prev = NULL; cur = head
+ *   while cur != NULL:
+ *       nxt = cur.next ; cur.next = prev ; prev = cur ; cur = nxt
+ *   return prev
+ */
+Node* reverseList(Node* head) {
+    Node *prev = NULL, *cur = head, *nxt = NULL;
+    while (cur) {
+        nxt = cur->next;
+        cur->next = prev;
+        prev = cur;
+        cur = nxt;
+    }
+    return prev;
+}
+
+/* ---------- Task 3 & 8: remove duplicates (unsorted list) ----------
+ * Algorithm: for every node 'cur', walk a second pointer 'run' over the rest
+ * of the list and unlink every node whose data equals cur.data.  O(n^2),
+ * no extra memory.
+ */
+void removeDuplicates(Node* head) {
+    for (Node* cur = head; cur; cur = cur->next) {
+        Node* run = cur;
+        while (run->next) {
+            if (run->next->data == cur->data) {
+                Node* dup = run->next;
+                run->next = dup->next;
+                delete dup;
+            } else {
+                run = run->next;
+            }
+        }
+    }
+}
+
+/* ---------- Task 4: detect a loop (Floyd's cycle detection) ----------
+ * slow moves 1 step, fast moves 2 steps. If they ever meet -> cycle.
+ * If fast reaches NULL -> no cycle.
+ */
+bool hasCycle(Node* head) {
+    Node *slow = head, *fast = head;
+    while (fast && fast->next) {
+        slow = slow->next;
+        fast = fast->next->next;
+        if (slow == fast) return true;
+    }
+    return false;
+}
+
+/* ---------- Task 5: middle node (left one when length is even) ----------
+ * fast only advances while it still has TWO nodes ahead, so for an even
+ * length slow stops on the left-middle node.
+ */
+Node* findMiddle(Node* head) {
+    if (!head) return NULL;
+    Node *slow = head, *fast = head;
+    while (fast->next && fast->next->next) {
+        slow = slow->next;
+        fast = fast->next->next;
+    }
+    return slow;
+}
+
+/* ---------- Task 6: split into even-priced and odd-priced lines ----------
+ * Walk the list once; unlink each node and attach it to the tail of the
+ * even list or the odd list (relative order preserved, nodes not copied).
+ */
+void splitEvenOdd(Node* head, Node*& evenHead, Node*& oddHead) {
+    evenHead = oddHead = NULL;
+    Node *eTail = NULL, *oTail = NULL;
+    while (head) {
+        Node* nxt = head->next;
+        head->next = NULL;
+        if (head->data % 2 == 0) {
+            if (!evenHead) evenHead = eTail = head;
+            else { eTail->next = head; eTail = head; }
+        } else {
+            if (!oddHead) oddHead = oTail = head;
+            else { oTail->next = head; oTail = head; }
+        }
+        head = nxt;
+    }
+}
+
+/* ---------- Task 7: reverse first half and second half separately ----------
+ * 1. count n.  first half = first n/2 nodes, second half = the rest.
+ * 2. reverse the first n/2 nodes; old head becomes the tail of the first half.
+ * 3. reverse the remaining nodes and join them after that tail.
+ * 1 2 3 4 5 6 7 8  ->  4 3 2 1 8 7 6 5
+ */
+Node* reverseHalves(Node* head) {
+    int n = 0;
+    for (Node* t = head; t; t = t->next) n++;
+    if (n < 2) return head;
+
+    int k = n / 2;
+    Node *prev = NULL, *cur = head, *nxt = NULL;
+    for (int i = 0; i < k; i++) {          // reverse first k nodes
+        nxt = cur->next;
+        cur->next = prev;
+        prev = cur;
+        cur = nxt;
+    }
+    // prev = new head of first half, head = its tail, cur = start of second half
+    head->next = reverseList(cur);
+    return prev;
+}
+
+/* ---------- Task 9: delete ALL nodes having a given identifier ----------
+ * Handles: key at beginning, middle, end, many times, whole list, not found.
+ *  1. while head holds key -> delete head.
+ *  2. for the rest, look at cur.next; if it holds key unlink & delete it,
+ *     otherwise move forward.
+ */
+Node* deleteAll(Node* head, int key) {
+    while (head && head->data == key) {
+        Node* t = head;
+        head = head->next;
+        delete t;
+    }
+    Node* cur = head;
+    while (cur && cur->next) {
+        if (cur->next->data == key) {
+            Node* t = cur->next;
+            cur->next = t->next;
+            delete t;
+        } else {
+            cur = cur->next;
+        }
+    }
+    return head;
+}
+
+/* ---------- Task 10: swap every two consecutive nodes (links only) ----------
+ * 1->2->3->4->5->6  ==>  2->1->4->3->6->5
+ * Uses a pointer-to-pointer 'link' that always points at the link which leads
+ * into the current pair.
+ */
+Node* swapPairs(Node* head) {
+    Node** link = &head;
+    while (*link && (*link)->next) {
+        Node* a = *link;
+        Node* b = a->next;
+        a->next = b->next;   // a now points past the pair
+        b->next = a;         // b before a
+        *link = b;           // previous part now points to b
+        link = &a->next;     // move to the next pair
+    }
+    return head;
+}
+
+/* ======================================================================
+ *                       PART 2 : DOUBLY LINKED LIST
+ * ====================================================================== */
+struct DNode {
+    string data;
+    DNode *prev, *next;
+    DNode(const string& d) : data(d), prev(NULL), next(NULL) {}
+};
+
+// ---------- helpers ----------
+void dAppend(DNode*& head, DNode*& tail, const string& v) {
+    DNode* n = new DNode(v);
+    if (!head) { head = tail = n; return; }
+    tail->next = n;
+    n->prev = tail;
+    tail = n;
+}
+void dPrint(DNode* h) {
+    for (; h; h = h->next) cout << h->data << " <-> ";
+    cout << "NULL\n";
+}
+void dFree(DNode* h) {
+    while (h) { DNode* t = h; h = h->next; delete t; }
+}
+
+/* ---------- DLL Task 1: swap desk i with desk (n+1-i) ----------
+ * Two pointers: 'left' from head, 'right' from tail. Swap their contents and
+ * move towards each other until they meet / cross.
+ * Only the data is exchanged, so every desk (node) keeps its address and links.
+ */
+void swapEnds(DNode* head, DNode* tail) {
+    DNode *l = head, *r = tail;
+    while (l && r && l != r && l->prev != r) {
+        string tmp = l->data;
+        l->data = r->data;
+        r->data = tmp;
+        l = l->next;
+        r = r->prev;
+    }
+}
+
+/* ---------- DLL Task 2: Music-player playlist ----------
+ * The task text gives no exact operations, so the usual playlist features
+ * are implemented: add song, remove song, play next / previous,
+ * show forward and backward.
+ */
+class Playlist {
+    DNode *head, *tail, *current;
+public:
+    Playlist() : head(NULL), tail(NULL), current(NULL) {}
+    ~Playlist() { dFree(head); }
+
+    void addSong(const string& s) {
+        dAppend(head, tail, s);
+        if (!current) current = head;
+    }
+    bool removeSong(const string& s) {
+        for (DNode* t = head; t; t = t->next) {
+            if (t->data == s) {
+                if (t == current) current = t->next ? t->next : t->prev;
+                if (t->prev) t->prev->next = t->next; else head = t->next;
+                if (t->next) t->next->prev = t->prev; else tail = t->prev;
+                delete t;
+                return true;
+            }
+        }
+        return false;
+    }
+    void playCurrent() {
+        if (current) cout << "Now playing: " << current->data << "\n";
+        else cout << "Playlist is empty.\n";
+    }
+    void next() {
+        if (!current) { playCurrent(); return; }
+        if (current->next) current = current->next;
+        else cout << "(end of playlist) ";
+        playCurrent();
+    }
+    void previous() {
+        if (!current) { playCurrent(); return; }
+        if (current->prev) current = current->prev;
+        else cout << "(start of playlist) ";
+        playCurrent();
+    }
+    void showForward() {
+        cout << "Playlist (forward) : ";
+        dPrint(head);
+    }
+    void showBackward() {
+        cout << "Playlist (backward): ";
+        for (DNode* t = tail; t; t = t->prev) cout << t->data << " <-> ";
+        cout << "NULL\n";
+    }
+};
+
+/* ---------- DLL Task 3: Inventory management ----------
+ * Best-suited structure = three NESTED linked lists:
+ *     Store list  ->  each Store has a Section list  ->  each Section has an Item list
+ * Search for store, then section, then add / delete in that item list.
+ */
+struct ItemNode {
+    string name;
+    int qty;
+    ItemNode* next;
+    ItemNode(const string& n, int q) : name(n), qty(q), next(NULL) {}
+};
+struct SectionNode {
+    string name;
+    ItemNode* items;
+    SectionNode* next;
+    SectionNode(const string& n) : name(n), items(NULL), next(NULL) {}
+};
+struct StoreNode {
+    string name, city;
+    SectionNode* sections;
+    StoreNode* next;
+    StoreNode(const string& n, const string& c) : name(n), city(c), sections(NULL), next(NULL) {}
+};
+
+class Inventory {
+    StoreNode* stores;
+
+    StoreNode* findStore(const string& s) {
+        for (StoreNode* t = stores; t; t = t->next) if (t->name == s) return t;
+        return NULL;
+    }
+    SectionNode* findSection(StoreNode* st, const string& sec) {
+        for (SectionNode* t = st->sections; t; t = t->next) if (t->name == sec) return t;
+        return NULL;
+    }
+    void printItems(SectionNode* sec) {
+        if (!sec->items) { cout << "    (no items)\n"; return; }
+        for (ItemNode* i = sec->items; i; i = i->next)
+            cout << "    - " << i->name << " (qty " << i->qty << ")\n";
+    }
+public:
+    Inventory() : stores(NULL) {}
+    ~Inventory() {
+        while (stores) {
+            StoreNode* st = stores; stores = stores->next;
+            while (st->sections) {
+                SectionNode* sc = st->sections; st->sections = sc->next;
+                while (sc->items) { ItemNode* i = sc->items; sc->items = i->next; delete i; }
+                delete sc;
+            }
+            delete st;
+        }
+    }
+
+    void addStore(const string& name, const string& city) {
+        StoreNode* n = new StoreNode(name, city);
+        if (!stores) { stores = n; return; }
+        StoreNode* t = stores;
+        while (t->next) t = t->next;
+        t->next = n;
+    }
+    // Add a new section in a store
+    bool addSection(const string& store, const string& section) {
+        StoreNode* st = findStore(store);
+        if (!st) { cout << "Store '" << store << "' not found.\n"; return false; }
+        if (findSection(st, section)) { cout << "Section already exists.\n"; return false; }
+        SectionNode* n = new SectionNode(section);
+        if (!st->sections) st->sections = n;
+        else {
+            SectionNode* t = st->sections;
+            while (t->next) t = t->next;
+            t->next = n;
+        }
+        return true;
+    }
+    // Store an item in a particular section of a particular store
+    bool storeItem(const string& store, const string& section, const string& item, int qty) {
+        StoreNode* st = findStore(store);
+        if (!st) { cout << "Store '" << store << "' not found.\n"; return false; }
+        SectionNode* sc = findSection(st, section);
+        if (!sc) { cout << "Section '" << section << "' not found.\n"; return false; }
+        for (ItemNode* i = sc->items; i; i = i->next)
+            if (i->name == item) { i->qty += qty; return true; }   // already stocked
+        ItemNode* n = new ItemNode(item, qty);
+        if (!sc->items) sc->items = n;
+        else {
+            ItemNode* t = sc->items;
+            while (t->next) t = t->next;
+            t->next = n;
+        }
+        return true;
+    }
+    // Remove an item from a particular section of a particular store
+    bool removeItem(const string& store, const string& section, const string& item) {
+        StoreNode* st = findStore(store);
+        if (!st) { cout << "Store '" << store << "' not found.\n"; return false; }
+        SectionNode* sc = findSection(st, section);
+        if (!sc) { cout << "Section '" << section << "' not found.\n"; return false; }
+        ItemNode *cur = sc->items, *prev = NULL;
+        while (cur && cur->name != item) { prev = cur; cur = cur->next; }
+        if (!cur) { cout << "Item '" << item << "' not found.\n"; return false; }
+        if (prev) prev->next = cur->next; else sc->items = cur->next;
+        delete cur;
+        return true;
+    }
+    // Display all items of a section of a store
+    void displaySection(const string& store, const string& section) {
+        StoreNode* st = findStore(store);
+        if (!st) { cout << "Store '" << store << "' not found.\n"; return; }
+        SectionNode* sc = findSection(st, section);
+        if (!sc) { cout << "Section '" << section << "' not found.\n"; return; }
+        cout << "Items in " << store << " / " << section << ":\n";
+        printItems(sc);
+    }
+    // Display all items of a store
+    void displayStore(const string& store) {
+        StoreNode* st = findStore(store);
+        if (!st) { cout << "Store '" << store << "' not found.\n"; return; }
+        cout << "Store: " << st->name << " (" << st->city << ")\n";
+        for (SectionNode* sc = st->sections; sc; sc = sc->next) {
+            cout << "  Section: " << sc->name << "\n";
+            printItems(sc);
+        }
+    }
+};
+
+/* ---------- DLL Task 4: theatre seat pattern ----------
+ * 1 2 3 4 5 6 7 8 9  ->  1 8 3 6 5 4 7 2 9
+ * First and last seat stay fixed. For seat positions i = 2,3,4,... moving
+ * towards the centre, the seat at position i is swapped with the seat at
+ * position (n+1-i) only when i is EVEN (alternate swapping).
+ * Data is exchanged, so nodes keep their addresses.
+ */
+void alternateSwap(DNode* head, DNode* tail, int n) {
+    if (n < 4) return;
+    DNode* l = head->next;
+    DNode* r = tail->prev;
+    int i = 2;
+    while (i < n + 1 - i) {
+        if (i % 2 == 0) {
+            string tmp = l->data;
+            l->data = r->data;
+            r->data = tmp;
+        }
+        l = l->next;
+        r = r->prev;
+        i++;
+    }
+}
+
+/* ======================================================================
+ *                      PART 3 : CIRCULAR LINKED LIST
+ * ====================================================================== */
+
+/* ---------- Josephus problem ----------
+ * Build a circular list 1..N. Starting at person 1, count M people; the M-th
+ * is removed from the circle. Repeat until one node remains -> survivor
+ * (the position you should stand in).
+ */
+int josephus(int N, int M) {
+    if (N <= 0 || M <= 0) return -1;
+    Node* head = new Node(1);
+    Node* tail = head;
+    for (int i = 2; i <= N; i++) {
+        tail->next = new Node(i);
+        tail = tail->next;
+    }
+    tail->next = head;                  // make it circular
+
+    Node* prev = tail;                  // node just before 'cur'
+    Node* cur = head;
+    while (cur->next != cur) {          // until one person is left
+        for (int c = 1; c < M; c++) {   // skip M-1 persons
+            prev = cur;
+            cur = cur->next;
+        }
+        cout << "  eliminated: " << cur->data << "\n";
+        prev->next = cur->next;         // remove cur
+        delete cur;
+        cur = prev->next;
+    }
+    int survivor = cur->data;
+    delete cur;
+    return survivor;
+}
+
+/* ---------- Round-robin task scheduler ---------- */
+enum Status { PENDING, IN_PROGRESS, COMPLETED };
+string statusName(Status s) {
+    if (s == PENDING) return "Pending";
+    if (s == IN_PROGRESS) return "In-progress";
+    return "Completed";
+}
+
+struct Task {
+    string name;
+    int priority;
+    Status status;
+    Task* next;
+    Task(const string& n, int p, Status s) : name(n), priority(p), status(s), next(NULL) {}
+};
+
+class Scheduler {
+    Task* tail;      // tail->next is the head, keeps list circular
+    Task* current;   // last task handed out by getNextTask()
+public:
+    Scheduler() : tail(NULL), current(NULL) {}
+    ~Scheduler() {
+        if (!tail) return;
+        Task* h = tail->next;
+        tail->next = NULL;              // break the circle, then free
+        while (h) { Task* t = h; h = h->next; delete t; }
+    }
+
+    // Add a task at the end, list stays circular
+    void addTask(const string& name, int priority, Status st = PENDING) {
+        Task* n = new Task(name, priority, st);
+        if (!tail) { n->next = n; tail = n; }
+        else { n->next = tail->next; tail->next = n; tail = n; }
+    }
+
+    // Remove a task by name
+    bool removeTask(const string& name) {
+        if (!tail) { cout << "No tasks.\n"; return false; }
+        Task *prev = tail, *cur = tail->next;           // cur starts at head
+        do {
+            if (cur->name == name) {
+                if (cur == cur->next) {                 // only task in list
+                    tail = NULL;
+                    current = NULL;
+                } else {
+                    prev->next = cur->next;
+                    if (cur == tail) tail = prev;
+                    if (cur == current) current = prev; // next call continues after prev
+                }
+                delete cur;
+                return true;
+            }
+            prev = cur;
+            cur = cur->next;
+        } while (prev != tail);
+        cout << "Task '" << name << "' not found.\n";
+        return false;
+    }
+
+    // Next task to run, round-robin, skipping everything that is not pending
+    Task* getNextTask() {
+        if (!tail) return NULL;
+        Task* t = current ? current->next : tail->next;
+        Task* start = t;
+        do {
+            if (t->status == PENDING) { current = t; return t; }
+            t = t->next;
+        } while (t != start);
+        return NULL;                                     // nothing pending
+    }
+
+    // Display all tasks starting from head
+    void displayAll() {
+        if (!tail) { cout << "No tasks.\n"; return; }
+        Task* t = tail->next;
+        do {
+            cout << "  [" << t->name << "] priority=" << t->priority
+                 << " status=" << statusName(t->status) << "\n";
+            t = t->next;
+        } while (t != tail->next);
+    }
+
+    // Update status by name and show the result
+    bool updateStatus(const string& name, Status st) {
+        if (!tail) return false;
+        Task* t = tail->next;
+        do {
+            if (t->name == name) {
+                t->status = st;
+                cout << "  Updated: " << t->name << " -> " << statusName(t->status) << "\n";
+                return true;
+            }
+            t = t->next;
+        } while (t != tail->next);
+        cout << "Task '" << name << "' not found.\n";
+        return false;
+    }
+};
+
+/* ======================================================================
+ *                               DEMO / MAIN
+ * ====================================================================== */
+void title(const string& s) { cout << "\n=== " << s << " ===\n"; }
+
+int main() {
+    /* ---------------- SINGLY LINKED LIST ---------------- */
+    title("SLL 1: Print logs in reverse (list unchanged)");
+    {
+        int a[] = {1, 2, 3, 4, 5};
+        Node* h = build(a, 5);
+        cout << "Original : "; print(h);
+        cout << "Reverse  : "; printReverse(h); cout << "\n";
+        cout << "Still    : "; print(h);
+        freeList(h);
+    }
+
+    title("SLL 2: Reverse playlist (links only)");
+    {
+        int a[] = {10, 20, 30, 40, 50};
+        Node* h = build(a, 5);
+        Node* firstSong = h;
+        cout << "Before: "; print(h);
+        h = reverseList(h);
+        cout << "After : "; print(h);
+        cout << "Old head node is now the last node (same address)? "
+             << ((firstSong->next == NULL) ? "yes" : "no") << "\n";
+        freeList(h);
+    }
+
+    title("SLL 3: Remove duplicate contacts");
+    {
+        int a[] = {5, 3, 5, 8, 3, 9, 5, 8};
+        Node* h = build(a, 8);
+        cout << "Before: "; print(h);
+        removeDuplicates(h);
+        cout << "After : "; print(h);
+        freeList(h);
+    }
+
+    title("SLL 4: Detect loop in sensor buffer");
+    {
+        int a[] = {1, 2, 3, 4, 5};
+        Node* h = build(a, 5);
+        cout << "Normal list has loop?  " << (hasCycle(h) ? "YES" : "NO") << "\n";
+        Node* t = h; while (t->next) t = t->next;
+        t->next = h->next->next;                  // 5 -> 3  (creates cycle)
+        cout << "Faulty list has loop?  " << (hasCycle(h) ? "YES" : "NO") << "\n";
+        t->next = NULL;                           // repair before freeing
+        freeList(h);
+    }
+
+    title("SLL 5: Middle friend (left one if even)");
+    {
+        int odd[] = {1, 2, 3, 4, 5};
+        int even[] = {1, 2, 3, 4, 5, 6};
+        Node* h1 = build(odd, 5);
+        Node* h2 = build(even, 6);
+        cout << "Odd  list "; print(h1);
+        cout << "  middle = " << findMiddle(h1)->data << "\n";
+        cout << "Even list "; print(h2);
+        cout << "  middle = " << findMiddle(h2)->data << "\n";
+        freeList(h1); freeList(h2);
+    }
+
+    title("SLL 6: Split into even-priced / odd-priced lines");
+    {
+        int a[] = {12, 7, 4, 9, 20, 15, 6};
+        Node* h = build(a, 7);
+        cout << "Cart  : "; print(h);
+        Node *ev, *od;
+        splitEvenOdd(h, ev, od);
+        cout << "Even  : "; print(ev);
+        cout << "Odd   : "; print(od);
+        freeList(ev); freeList(od);
+    }
+
+    title("SLL 7: Reverse first half and second half separately");
+    {
+        int a[] = {1, 2, 3, 4, 5, 6, 7, 8};
+        Node* h = build(a, 8);
+        cout << "Before: "; print(h);
+        h = reverseHalves(h);
+        cout << "After : "; print(h);
+        freeList(h);
+    }
+
+    title("SLL 8: Remove duplicate stamps");
+    {
+        int a[] = {101, 102, 101, 103, 102, 104, 104};
+        Node* h = build(a, 7);
+        cout << "Before: "; print(h);
+        removeDuplicates(h);
+        cout << "After : "; print(h);
+        freeList(h);
+    }
+
+    title("SLL 9: Delete all copies of a book id");
+    {
+        int a[] = {7, 7, 1, 7, 2, 3, 7, 7};
+        Node* h = build(a, 8);
+        cout << "Before         : "; print(h);
+        h = deleteAll(h, 7);
+        cout << "After del 7    : "; print(h);
+        h = deleteAll(h, 99);
+        cout << "After del 99   : "; print(h);
+        freeList(h);
+    }
+
+    title("SLL 10: Swap tasks in pairs");
+    {
+        int a[] = {1, 2, 3, 4, 5, 6};
+        Node* h = build(a, 6);
+        cout << "Before: "; print(h);
+        h = swapPairs(h);
+        cout << "After : "; print(h);
+        freeList(h);
+
+        int b[] = {1, 2, 3, 4, 5};
+        h = build(b, 5);
+        cout << "Odd length before: "; print(h);
+        h = swapPairs(h);
+        cout << "Odd length after : "; print(h);
+        freeList(h);
+    }
+
+    /* ---------------- DOUBLY LINKED LIST ---------------- */
+    title("DLL 1: Swap desks from both ends");
+    {
+        DNode *h = NULL, *t = NULL;
+        const char* names[] = {"Alice", "Bob", "Charlie", "Dana", "Eva", "Frank"};
+        for (int i = 0; i < 6; i++) dAppend(h, t, names[i]);
+        cout << "Before: "; dPrint(h);
+        swapEnds(h, t);
+        cout << "After : "; dPrint(h);
+        dFree(h);
+    }
+
+    title("DLL 2: Music player playlist");
+    {
+        Playlist p;
+        p.addSong("Song A"); p.addSong("Song B"); p.addSong("Song C"); p.addSong("Song D");
+        p.showForward();
+        p.showBackward();
+        p.playCurrent();
+        p.next(); p.next(); p.previous();
+        cout << "Removing 'Song C'...\n";
+        p.removeSong("Song C");
+        p.showForward();
+        p.next(); p.next();
+    }
+
+    title("DLL 3: Inventory management system");
+    {
+        Inventory inv;
+        inv.addStore("MegaMart-Lahore", "Lahore");
+        inv.addStore("MegaMart-Karachi", "Karachi");
+        inv.addSection("MegaMart-Lahore", "Toys");
+        inv.addSection("MegaMart-Lahore", "Grocery");
+        inv.addSection("MegaMart-Lahore", "Fruits");
+        inv.addSection("MegaMart-Karachi", "Fruits");
+        inv.storeItem("MegaMart-Lahore", "Toys", "Lego Set", 15);
+        inv.storeItem("MegaMart-Lahore", "Toys", "Teddy Bear", 30);
+        inv.storeItem("MegaMart-Lahore", "Grocery", "Rice 5kg", 100);
+        inv.storeItem("MegaMart-Lahore", "Fruits", "Apple", 60);
+        inv.storeItem("MegaMart-Karachi", "Fruits", "Mango", 80);
+
+        inv.displaySection("MegaMart-Lahore", "Toys");
+        cout << "\nRemoving 'Teddy Bear' from Lahore/Toys\n";
+        inv.removeItem("MegaMart-Lahore", "Toys", "Teddy Bear");
+        inv.displaySection("MegaMart-Lahore", "Toys");
+        cout << "\n";
+        inv.displayStore("MegaMart-Lahore");
+        cout << "\n";
+        inv.displayStore("MegaMart-Karachi");
+    }
+
+    title("DLL 4: Theatre seating pattern");
+    {
+        DNode *h = NULL, *t = NULL;
+        for (int i = 1; i <= 9; i++) dAppend(h, t, to_string(i));
+        cout << "Before: "; dPrint(h);
+        alternateSwap(h, t, 9);
+        cout << "After : "; dPrint(h);
+        dFree(h);
+    }
+
+    /* ---------------- CIRCULAR LINKED LIST ---------------- */
+    title("CLL 1: Josephus problem (N = 7, M = 3)");
+    {
+        int survivor = josephus(7, 3);
+        cout << "Safe position to survive: " << survivor << "\n";
+    }
+
+    title("CLL 2: Round-robin task scheduler");
+    {
+        Scheduler s;
+        s.addTask("Design",  2);
+        s.addTask("Coding",  1);
+        s.addTask("Testing", 3);
+        s.addTask("Deploy",  4);
+        cout << "All tasks:\n"; s.displayAll();
+
+        s.updateStatus("Coding", COMPLETED);
+        s.updateStatus("Testing", IN_PROGRESS);
+
+        cout << "Round-robin order of pending tasks:\n";
+        for (int i = 0; i < 4; i++) {
+            Task* t = s.getNextTask();
+            cout << "  next -> " << (t ? t->name : string("none pending")) << "\n";
+        }
+
+        cout << "Removing 'Design'\n";
+        s.removeTask("Design");
+        s.displayAll();
+        Task* t = s.getNextTask();
+        cout << "  next -> " << (t ? t->name : string("none pending")) << "\n";
+
+        s.updateStatus("Deploy", COMPLETED);
+        t = s.getNextTask();
+        cout << "  next -> " << (t ? t->name : string("none pending")) << "\n";
+    }
+
+    return 0;
+}
